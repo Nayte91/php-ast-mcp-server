@@ -1,0 +1,9 @@
+services:
+  ast-mcp:
+    build:
+      context: .
+      dockerfile: ./Containerfile
+    ports:
+      - "9005:9005"
+    volumes:
+      - ./:/app:ro # Adapt with your project's path

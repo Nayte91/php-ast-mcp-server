@@ -1,0 +1,106 @@
+{
+  "name": "PHP-AST",
+  "description": "Server MCP for generating AST from PHP files",
+  "version": "1.0.0",
+  "server": {
+    "host": "localhost",
+    "port": 9005,
+    "router": "/usr/local/mcp/mcp_ast_server.php"
+  },
+  "php": {
+    "version": "8.4",
+    "extensions": ["ast"]
+  },
+  "paths": {
+    "project_root": "/app",
+    "tools": "/usr/local/mcp"
+  },
+  "routes": {
+    "/ast": {
+      "method": "GET",
+      "query_parameters": {
+        "path": {
+          "required": true,
+          "type": "string",
+          "description": "File or directory path to analyze"
+        },
+        "public": {
+          "required": false,
+          "type": "boolean",
+          "default": false,
+          "description": "Filter to show only public methods and properties (excludes protected and private)"
+        }
+      },
+      "description": "Returns the AST of the specified file or folder with optional public-only filtering"
+    }
+  },
+  "notes": [
+    "All requests must be GET",
+    "Project is mounted read-only under /app",
+    "AST version is determined automatically from PHP version",
+    "The 'public' parameter filters out protected and private methods/properties when set to true"
+  ],
+  "claude_code_usage": {
+    "webfetch_limitation": "WebFetch tool cannot access localhost URLs due to security restrictions",
+    "recommended_method": "Use Bash tool with curl command instead",
+    "response_format": {
+      "structure": "JSON object with file path as key and class summary as value",
+      "class_summary": {
+        "type": "Always 'class_summary'",
+        "name": "Class name",
+        "interfaces": "Array of implemented interface names",
+        "properties": "Array of property objects with name and visibility",
+        "methods": "Array of method objects with name, visibility, parameters count, and return type"
+      },
+      "filtering": {
+        "public=false": "Shows all methods and properties (public, protected, private)",
+        "public=true": "Shows only public methods and properties, excludes abstract members"
+      }
+    },
+    "examples": [
+      {
+        "description": "Get AST of single PHP file",
+        "command": "curl \"http://localhost:9005/ast?path=/app/src/User/Entity/User.php\"",
+        "returns": "Complete AST structure for the file"
+      },
+      {
+        "description": "Get only public methods and properties of a file",
+        "command": "curl \"http://localhost:9005/ast?path=/app/src/User/Entity/User.php&public=true\"",
+        "returns": "AST structure showing only public visibility members"
+      },
+      {
+        "description": "Analyze entire directory",
+        "command": "curl \"http://localhost:9005/ast?path=/app/src/Organization\"",
+        "returns": "AST for all PHP files in directory"
+      },
+      {
+        "description": "Analyze directory with public-only filter",
+        "command": "curl \"http://localhost:9005/ast?path=/app/src/Organization&public=true\"",
+        "returns": "AST for all PHP files showing only public methods and properties"
+      },
+      {
+        "description": "Extract property attributes (Symfony constraints)",
+        "command": "curl -s \"http://localhost:9005/ast?path=/app/src/User/Entity/User.php\" | python3 -m json.tool | grep -A 20 -B 5 '\"email\"'",
+        "use_case": "Find validation constraints on specific property"
+      },
+      {
+        "description": "Find all PHP attributes in a class",
+        "command": "curl -s \"http://localhost:9005/ast?path=/app/src/User/Entity/User.php\" | python3 -m json.tool | grep -A 10 'AST_ATTRIBUTE'",
+        "use_case": "Locate #[Assert\\Email], #[ORM\\Column], etc."
+      },
+      {
+        "description": "Save AST for detailed analysis",
+        "command": "curl -s \"http://localhost:9005/ast?path=/app/src/User/Entity/User.php\" > /tmp/user_ast.json",
+        "use_case": "Offline analysis or processing"
+      }
+    ],
+    "common_node_types_in_response": [
+      "AST_STMT_LIST: Root statement list",
+      "AST_CLASS: Class definition",
+      "AST_PROP_GROUP: Property group with attributes",
+      "AST_PROP_ELEM: Individual property (contains name)",
+      "AST_ATTRIBUTE_LIST: PHP 8 attributes container",
+      "AST_ATTRIBUTE: Individual attribute like #[Assert\\NotBlank]"
+    ]
+  }
+}
