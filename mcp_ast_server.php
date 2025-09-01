@@ -14,6 +14,25 @@ enum Filter {
     case PUBLIC;
 }
 
+class Logger
+{
+    public static function log(string $message): void
+    {
+        $timestamp = date('Y-m-d H:i:s');
+        file_put_contents('php://stdout', "[$timestamp] $message" . PHP_EOL);
+    }
+    
+    public static function formatBytes(int $bytes): string
+    {
+        return round($bytes / 1024 / 1024, 2) . 'MB';
+    }
+    
+    public static function formatDuration(float $seconds): string
+    {
+        return round($seconds, 3) . 's';
+    }
+}
+
 class AstProvider
 {
     private int $astVersion = 110;
@@ -332,20 +351,41 @@ class AstProvider
 
 function handleHttpRequest(): void
 {
+    $memStart = memory_get_usage();
+    $timeStart = microtime(true);
+    
     header('Content-Type: application/json');
 
     $requestMethod = $_SERVER['REQUEST_METHOD'];
     if ($requestMethod !== 'GET') {
         http_response_code(405);
-        echo json_encode(["error" => "Only GET requests are supported"]);
+        $response = json_encode(["error" => "Only GET requests are supported"]);
+        echo $response;
+        
+        $tokens = strlen($response);
+        $memUsed = Logger::formatBytes(memory_get_usage() - $memStart);
+        $duration = Logger::formatDuration(microtime(true) - $timeStart);
+        Logger::log("[HTTP] Error Response: status=405, tokens=$tokens, memory=$memUsed, duration=$duration");
         exit;
     }
 
     $filter = filter_var($_GET['public'] ?? false, FILTER_VALIDATE_BOOL) ? Filter::PUBLIC : Filter::ALL;
+    $filterStr = $filter === Filter::PUBLIC ? 'PUBLIC' : 'ALL';
 
     $path = $_GET['path'] ?? null;
+    
+    // Log de la requête entrante
+    $clientIp = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+    Logger::log("[HTTP] Request from $clientIp: path=" . ($path ?? 'none') . ", filter=$filterStr");
+    
     if (!$path) {
-        echo json_encode(["error" => "Missing 'path' query parameter"]);
+        $response = json_encode(["error" => "Missing 'path' query parameter"]);
+        echo $response;
+        
+        $tokens = strlen($response);
+        $memUsed = Logger::formatBytes(memory_get_usage() - $memStart);
+        $duration = Logger::formatDuration(microtime(true) - $timeStart);
+        Logger::log("[HTTP] Error Response: status=400, tokens=$tokens, memory=$memUsed, duration=$duration");
         exit;
     }
 
@@ -358,15 +398,32 @@ function handleHttpRequest(): void
             $result = $provider->parseFile($path, $filter);
         }
 
-        echo json_encode($result, JSON_PRETTY_PRINT);
+        $response = json_encode($result, JSON_PRETTY_PRINT);
+        echo $response;
+        
+        // Log de la réponse avec métriques
+        $tokens = strlen($response);
+        $memUsed = Logger::formatBytes(memory_get_usage() - $memStart);
+        $duration = Logger::formatDuration(microtime(true) - $timeStart);
+        Logger::log("[HTTP] Response: status=200, tokens=$tokens, memory=$memUsed, duration=$duration");
+        
     } catch (Throwable $e) {
         http_response_code(400);
-        echo json_encode(["error" => $e->getMessage()]);
+        $response = json_encode(["error" => $e->getMessage()]);
+        echo $response;
+        
+        $tokens = strlen($response);
+        $memUsed = Logger::formatBytes(memory_get_usage() - $memStart);
+        $duration = Logger::formatDuration(microtime(true) - $timeStart);
+        Logger::log("[HTTP] Error Response: status=400, error=\"{$e->getMessage()}\", tokens=$tokens, memory=$memUsed, duration=$duration");
     }
 }
 
 function handleCliRequest(): void
 {
+    $memStart = memory_get_usage();
+    $timeStart = microtime(true);
+    
     global $argc, $argv;
 
     if ($argc < 2) {
@@ -376,7 +433,12 @@ function handleCliRequest(): void
     }
 
     $filter = in_array('--public', $argv, true) ? Filter::PUBLIC : Filter::ALL;
+    $filterStr = $filter === Filter::PUBLIC ? 'PUBLIC' : 'ALL';
     $path = $argv[1];
+    
+    // Log de la requête CLI
+    Logger::log("[CLI] Request: path=$path, filter=$filterStr");
+    
     $provider = new AstProvider();
 
     try {
@@ -386,9 +448,22 @@ function handleCliRequest(): void
             $result = $provider->parseFile($path, $filter);
         }
 
-        echo json_encode($result, JSON_PRETTY_PRINT) . "\n";
+        $response = json_encode($result, JSON_PRETTY_PRINT);
+        echo $response . "\n";
+        
+        // Log de la réponse avec métriques
+        $tokens = strlen($response);
+        $memUsed = Logger::formatBytes(memory_get_usage() - $memStart);
+        $duration = Logger::formatDuration(microtime(true) - $timeStart);
+        Logger::log("[CLI] Response: tokens=$tokens, memory=$memUsed, duration=$duration");
+        
     } catch (Throwable $e) {
         fwrite(STDERR, "Error: " . $e->getMessage() . "\n");
+        
+        $memUsed = Logger::formatBytes(memory_get_usage() - $memStart);
+        $duration = Logger::formatDuration(microtime(true) - $timeStart);
+        Logger::log("[CLI] Error Response: error=\"{$e->getMessage()}\", memory=$memUsed, duration=$duration");
+        
         exit(1);
     }
 }

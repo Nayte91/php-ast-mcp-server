@@ -10,4 +10,4 @@ COPY system/MCP/mcp_ast_server.php /usr/local/mcp/mcp_ast_server.php
 WORKDIR /app
 
 EXPOSE 9005
-CMD ["php", "-S", "0.0.0.0:9005", "/usr/local/mcp/mcp_ast_server.php"]
+CMD ["sh", "-c", "php -S 0.0.0.0:9005 /usr/local/mcp/mcp_ast_server.php 2>/dev/null"]
